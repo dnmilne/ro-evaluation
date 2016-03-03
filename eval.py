@@ -71,6 +71,7 @@ if __name__ == '__main__':
         # f-scores
         fscores = []
         for label in LABELS:
+            if label == 'green': continue
             correct, system, gold = 0, 0, 0
             for i, ((test_id, test_label), (gold_id, gold_label)) in enumerate(pairs):
                 if test_id != gold_id:
