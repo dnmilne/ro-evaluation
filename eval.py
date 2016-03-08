@@ -14,12 +14,13 @@ import sys, argparse
 
 LABELS = ('crisis', 'red', 'amber', 'green')
 
-def load_and_validate(path):
+def load_and_validate(path, constraints=set()):
     """
     Validate list of triage classifications from filename.
     Load into a list of pairs.
     """
     pairs = []
+    ids_found = set()
 
     with open(path) as f:
         for i, line in enumerate(f):
@@ -29,11 +30,24 @@ def load_and_validate(path):
                     print('Line {} ({}) in {} has an invalid label, aborting.'\
                             .format(i, line.strip(), path), file=sys.stderr)
                     sys.exit(2)
+                if idx in ids_found:
+                    print('Duplicate ID on line {} ({}) in {}, aborting.'\
+                            .format(i, line.strip(), path), file=sys.stderr)
+                    sys.exit(3)
+                ids_found.add(idx)
+                if constraints and not idx in constraints:
+                    print('ID on line {} ({}) in {} is not in CLPsych16 test ids, aborting.'\
+                            .format(i, line.strip(), path), file=sys.stderr)
+                    sys.exit(4)
                 pairs.append((idx, label))
             except ValueError:
                 print('Line {} ({}) in {} does not have two columns, aborting.'\
                         .format(i, line.strip(), path), file=sys.stderr)
                 sys.exit(1)
+    if constraints and len(constraints) != len(ids_found):
+        print('Size of test data is incorrect (is {}, should be {}), aborting.'\
+                .format(len(ids_found), len(constraints)), file=sys.stderr)
+        sys.exit(5)
     print('{} validates.'.format(path))
     return pairs
 
@@ -42,9 +56,18 @@ if __name__ == '__main__':
     p.add_argument('test', help='Test file to evaluate.')
     p.add_argument('--gold', help='Gold file to test against. If a gold file \
             is not provided, this script will validate the test file only.')
+    p.add_argument('--clpsych16', help='Add extra validation checks \
+            for CLPsych16 test data.', action='store_true')
     args = p.parse_args()
 
-    test_pairs = load_and_validate(args.test)
+    if args.clpsych16:
+        ids = set()
+        with open('data/test_posts.tsv') as f:
+            for line in f:
+                ids.add(line.strip())
+        test_pairs = load_and_validate(args.test, ids)
+    else:
+        test_pairs = load_and_validate(args.test)
    
     if args.gold:
         gold_pairs = load_and_validate(args.gold)
