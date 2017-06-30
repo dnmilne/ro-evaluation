@@ -1,9 +1,10 @@
 # ro-evaluation
-Evaluation tools and other resources for the CLPsych 2016 shared task.
 
-## Format 
+This script helps you validate and evaluate submissions for the CLPsych 2016 and 2017 shared tasks.
 
-Files should be a tab-separated list with two columns:                           
+## File format
+
+Your submission file should be a tab-separated list with two columns:
 * post (message) ID                                                         
 * triage label: crisis, red, amber or green
 
@@ -16,24 +17,31 @@ E.g.:
 
 ## Validation
 
-Call as, e.g.:
+To check the submission file is formatted correctly, run:
+
 ```
-python3 eval.py data/sample_test.tsv
-python3 eval.py incorrect-samples/wrong-label
+python3 eval.py path/to/submission.tsv
 ```
 
-## Validation for CLPsych16
+To additionally check that the file contains the correct entries for a particular shared task, run:
 
-Call as, e.g.:
 ```
-python3 eval.py --clpsych16 data/sample_test.tsv
-python3 eval.py --clpsych16 incorrect-samples/wrong-label
-python3 eval.py --clpsych16 data/sample_clpsych16.tsv
+python3 eval.py path/to/submission.tsv --task=clpsych16
 ```
+
+or
+
+```
+python3 eval.py path/to/submission.tsv --task=clpsych17
+```
+
 
 ## Evaluation
 
-Call as, e.g.:
+If you have a copy of the gold standard (i.e. hand-labeled) test set, run:
+
 ```
-python3 eval.py --gold data/sample_gold.tsv data/sample_test.tsv
+python3 eval.py path/to/submission.tsv --gold path/to/gold.tsv
 ```
+
+Please note that the gold standard test set is only given out after the shared task has concluded.

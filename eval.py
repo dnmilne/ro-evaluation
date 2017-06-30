@@ -11,8 +11,24 @@ This script provides a few metrics. Official score is macro-averaged F-score.
 """
 
 import sys, argparse
+from sklearn import metrics
 
 LABELS = ('crisis', 'red', 'amber', 'green')
+
+FLAGGED_MAP = {
+    'crisis': True,
+    'red': True,
+    'amber': True,
+    'green': False
+}
+
+URGENT_MAP = {
+    'crisis': True,
+    'red': True,
+    'amber': False,
+    'green': False
+}
+
 
 def load_and_validate(path, constraints=set()):
     """
@@ -48,85 +64,112 @@ def load_and_validate(path, constraints=set()):
         print('Size of test data is incorrect (is {}, should be {}), aborting.'\
                 .format(len(ids_found), len(constraints)), file=sys.stderr)
         sys.exit(5)
+
+    pairs.sort(key=lambda x: x[0])
+
     print('{} validates.'.format(path))
+
+    #print(pairs)
+
     return pairs
+
+
+def load_test_ids(path):
+    ids = set()
+    with open(path) as f:
+        for line in f:
+            ids.add(line.strip())
+
+    return ids
+
+def make_binary_for_label(pairs, label):
+
+    binary_pairs = []
+
+    for i, (idx, lbl) in enumerate(pairs):
+        binary_pairs.append((idx, (lbl == label)))
+
+    return binary_pairs
+
+
+def make_binary_with_map(pairs, map):
+
+    binary_pairs = []
+    for i, (idx, label) in enumerate(pairs):
+        binary_pairs.append((idx, map[label]))
+
+    return binary_pairs
+
+def get_labels(pairs):
+
+    labels = []
+
+    for i, (idx, label) in enumerate(pairs):
+        labels.append(label)
+
+    return labels
+
 
 if __name__ == '__main__':
     p = argparse.ArgumentParser()
     p.add_argument('test', help='Test file to evaluate.')
     p.add_argument('--gold', help='Gold file to test against. If a gold file \
             is not provided, this script will validate the test file only.')
-    p.add_argument('--clpsych16', help='Add extra validation checks \
-            for CLPsych16 test data.', action='store_true')
+    p.add_argument('--task', help='Add extra validation checks for a particular task', choices=['clpsych16','clpsych17'])
+
     args = p.parse_args()
 
-    if args.clpsych16:
-        ids = set()
-        with open('data/test_posts.tsv') as f:
-            for line in f:
-                ids.add(line.strip())
-        test_pairs = load_and_validate(args.test, ids)
-    else:
-        test_pairs = load_and_validate(args.test)
-   
+    test_ids = None
+    if args.task is not None:
+        test_ids = load_test_ids('data/test_ids/{}.tsv'.format(args.task))
+
+    test_pairs = load_and_validate(args.test, test_ids)
+
+
     if args.gold:
         gold_pairs = load_and_validate(args.gold)
         if len(test_pairs) != len(gold_pairs):
             print('Number of test and gold instances is not equal, aborting.', file=sys.stderr)
             sys.exit(3)
 
-
-        # evaluate
-        pairs = list(zip(test_pairs, gold_pairs))
-        
-        # accuracy
-        count, total = 0, 0
-        for i, ((test_id, test_label), (gold_id, gold_label)) in enumerate(pairs):
-            if test_id != gold_id:
-                print('Line {} ids are not equal ({}, {}), aborting.'.format(i, test_id, gold_id))
-                sys.exit(4)
-            else:
-                if test_label == gold_label:
-                    count += 1
-                total += 1
-        print('accuracy: {:.2f}'.format(count/total))
-
-        # f-scores
-        fscores = []
+        print()
         for label in LABELS:
             if label == 'green': continue
-            correct, system, gold = 0, 0, 0
-            for i, ((test_id, test_label), (gold_id, gold_label)) in enumerate(pairs):
-                if test_id != gold_id:
-                    print('Line {} ids are not equal ({}, {}), aborting.'.format(i, test_id, gold_id))
-                    sys.exit(4)
-                else:
-                    if test_label == gold_label and test_label == label:
-                        correct += 1
-                        system += 1
-                        gold += 1 
-                    elif test_label == label and gold_label != label:
-                        system += 1
-                    elif test_label != label and gold_label == label:
-                        gold += 1
-            
-            if not system:
-                P = 0.0
-            else:
-                P = correct / system
 
-            if not gold:
-                R = 0.0
-            else:
-                R = correct / gold
-            
-            if not R and not P:
-                F = 0.0
-            else:
-                F = 2 * (P * R) / (P + R)
+            gold = get_labels(make_binary_for_label(gold_pairs, label))
+            test = get_labels(make_binary_for_label(test_pairs, label))
 
-            print('{}\tP R F:\t{:.2f} ({}/{})\t{:.2f} ({}/{})\t{:.2f}'.format(label, P, correct, system, R, correct, gold, F))
-            fscores.append(F)
+            r = metrics.recall_score(gold, test)
+            p = metrics.precision_score(gold, test)
+            f = metrics.f1_score(gold, test)
 
-        print('macro-averaged F-score: {:.2f}'.format(sum(fscores)/len(fscores)))
+            print('{}\tP R F:\t{:.3f} \t{:.3f} \t{:.3f}'.format(label, p, r, f))
+
+        accuracy = metrics.accuracy_score(get_labels(gold_pairs), get_labels(test_pairs));
+        macro_f1 = metrics.f1_score(get_labels(gold_pairs), get_labels(test_pairs), average='macro', labels=['crisis', 'red', 'amber'])
+
+        print()
+        print("accuracy: {:.3f}".format(accuracy))
+        print("macro-averaged f1: {:.3f}".format(macro_f1))
+        print()
+
+        flagged_gold = get_labels(make_binary_with_map(gold_pairs, FLAGGED_MAP))
+        flagged_test = get_labels(make_binary_with_map(test_pairs, FLAGGED_MAP))
+
+        flaggedP = metrics.precision_score(flagged_gold, flagged_test)
+        flaggedR = metrics.recall_score(flagged_gold, flagged_test)
+        flaggedF = metrics.f1_score(flagged_gold, flagged_test)
+
+        print('flagged:\tP R F:\t{:.3f} \t{:.3f} \t{:.3f}'.format(flaggedP, flaggedR, flaggedF))
+
+        urgent_gold = get_labels(make_binary_with_map(gold_pairs, URGENT_MAP))
+        urgent_test = get_labels(make_binary_with_map(test_pairs, URGENT_MAP))
+
+        urgentP = metrics.precision_score(urgent_gold, urgent_test)
+        urgentR = metrics.recall_score(urgent_gold, urgent_test)
+        urgentF = metrics.f1_score(urgent_gold, urgent_test)
+
+        print('urgent: \tP R F:\t{:.3f} \t{:.3f} \t{:.3f}'.format(urgentP, urgentR, urgentF))
+
+
 
